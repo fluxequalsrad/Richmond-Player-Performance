@@ -1,0 +1,29 @@
+---
+title: "Richmond Player Performance"
+output: richmond_html
+---
+
+Load libraries
+```{r load libraries}
+library(tidyverse)
+```
+
+Read in data
+```{r load data}
+# Player performance data from 1965 to 2024
+player_stats <-read.csv("Player Stats 1965-2024.csv")
+
+# List of player information since the club's inception
+player_list <-read.csv("Player List.csv")
+```
+
+Initial Exploration
+```{r initial exploration}
+#How many rows and columns?
+#Is there missing data?
+summary(player_stats)
+#merge on player name and seasons. split seasons into two columns. check if first column > 1990 keep, if not check second column > 1990 keep, else remove row.
+# remove players with less than 100 games (father son rule)
+
+```
+
