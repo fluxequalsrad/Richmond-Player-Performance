@@ -6,6 +6,7 @@ output: richmond_html
 Load libraries
 ```{r load libraries}
 library(tidyverse)
+library(naniar)
 ```
 
 Read in data
@@ -19,11 +20,52 @@ player_list <-read.csv("Player List.csv")
 
 Initial Exploration
 ```{r initial exploration}
-#How many rows and columns?
-#Is there missing data?
-summary(player_stats)
-#merge on player name and seasons. split seasons into two columns. check if first column > 1990 keep, if not check second column > 1990 keep, else remove row.
-# remove players with less than 100 games (father son rule)
+# View data dimensions
+cat("Number of rows:", nrow(player_stats), "\n")
+cat("Number of columns:", ncol(player_stats), "\n")
 
+#Is there missing data?
+cat("\n", "Amount of missing data per column:", "\n")
+colSums(is.na(player_stats))
+```
+Our Player Stats table contains data for 550 players recorded across 24 attributes. Some missing data is to be expected (i.e. those playing in the back pocket are unlikely to ever kick a goal) but certain columns have a lot more than is correct. When reviewing the data, we can be seen that some attributes only began being recorded during the 1998 and 1999 seasons. For this reason, we will split our data into the 'core' attributes, those recorded since 1965, and the 'modern' attributes, recorded since 1998/1999.
+
+Furthermore, some statistics are redundant for instance, we care about the number of marks taken, but not whether they were contested or uncontested additionally, a player's disposals is a composite metric of kicks and handballs resulting in double counting if included.
+
+```{r edit columns}
+# drop columns
+player_stats <- subset(player_stats, select = -c(DI, HO, RB, IF, BR, CP, UP, CM, MI, BO, GA))
+# rename X1. column
+names(player_stats)[which(names(player_stats) == "X1.")] <- "1Perc"
 ```
 
+
+A data dictionary is provided below
+
+```{r data dictionary}
+Column_Name <- c("Player", "GM", "KI", "MK", "HB", "GL", "BH", "TK", "CL", "CG", "FF", "FA", "1Perc")
+Description <- c("Player Name", "Games", "Kicks", "Marks", "Handballs", "Goals", "Behinds", "Tackles", "Clearances", "Clangers", "Frees For", "Frees Against", "1 Percenters")
+dict <- data.frame(Column_Name, Description)
+print.data.frame(dict, row.names = FALSE, max = NULL)
+```
+
+As a final step before starting our analysis, null values will be replaced with zeros and players with less than 100 games will be dropped. Playing 100 games for a team is a requirement for the father-son rule and will help reduce our data set as we search for the best player of all time. 
+
+```{r final wrangling}
+# replace NA with 0
+player_stats[is.na(player_stats)] <- 0
+
+# drop players with less than 100 games
+player_stats <- filter(player_stats, player_stats$GM >=100)
+
+# Extract core player stats into its own data set
+core_player_stats <- select(player_stats, GM, KI, MK, HB, GL, BH, FF, FA)
+```
+
+ANALYSIS
+
+Merge player_information and player_stats into one data table
+
+```{r inner merge data tables}
+combined_player_stats <- merge(player_stats, player_information, by = "Player", all = FALSE)
+```
