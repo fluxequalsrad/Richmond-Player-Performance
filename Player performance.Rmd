@@ -1,15 +1,15 @@
 ---
 title: "Richmond Player Performance"
-output: richmond_html
+output: html_document
 ---
 
-Load libraries
+### Load libraries
 ```{r load libraries}
 library(tidyverse)
 library(naniar)
 ```
 
-Read in data
+###Read in data
 ```{r load data}
 # Player performance data from 1965 to 2024
 player_stats <-read.csv("Player Stats 1965-2024.csv")
@@ -18,7 +18,7 @@ player_stats <-read.csv("Player Stats 1965-2024.csv")
 player_list <-read.csv("Player List.csv")
 ```
 
-Initial Exploration
+###Data Exploration and preparation
 ```{r initial exploration}
 # View data dimensions
 cat("Number of rows:", nrow(player_stats), "\n")
@@ -30,28 +30,44 @@ colSums(is.na(player_stats))
 ```
 Our Player Stats table contains data for 550 players recorded across 24 attributes. Some missing data is to be expected (i.e. those playing in the back pocket are unlikely to ever kick a goal) but certain columns have a lot more than is correct. When reviewing the data, we can be seen that some attributes only began being recorded during the 1998 and 1999 seasons. For this reason, we will split our data into the 'core' attributes, those recorded since 1965, and the 'modern' attributes, recorded since 1998/1999.
 
-Furthermore, some statistics are redundant for instance, we care about the number of marks taken, but not whether they were contested or uncontested additionally, a player's disposals is a composite metric of kicks and handballs resulting in double counting if included.
+Furthermore, some statistics are redundant and will be removed from our data set. For instance, we care about the number of marks taken, but not whether they were contested or uncontested and the number of Brownlow votes that a player has accrued tells us other's views on the player but can be influenced by factors outside of their pure performance.
 
 ```{r edit columns}
 # drop columns
-player_stats <- subset(player_stats, select = -c(DI, HO, RB, IF, BR, CP, UP, CM, MI, BO, GA))
+player_stats <- subset(player_stats, select = -c(HO, BR, CP, UP, CM, MI, BO, GA))
 # rename X1. column
-names(player_stats)[which(names(player_stats) == "X1.")] <- "1Perc"
+names(player_stats)[which(names(player_stats) == "X1.")] <- "1P"
 ```
 
+I will create a new column 'ACC' that uses the goals and behinds statistics to calculate the players accuracy.
+```{r accuracy metric}
+# create accuracy column
+player_stats <- mutate(player_stats, ACC = GL / (GL + BH))
+# move accuracy column next to GL column
+player_stats <- relocate(player_stats, ACC, .after=GL)
+# drop behinds column
+player_stats <- select(player_stats, "Player", "GM", "KI", "MK", "HB", "GL", "ACC", "BH", "TK", "CL", "CG", "FF", "FA", "1P")
+```
+While subjective, free kicks are usually awarded to players for being first to the ball or strong tackling while they are usually given for undisciplined play. In this analysis, a free kick differential and ratio will both be considered.
+Free kick ratio?
+Free kick differential?
+Frees For and Against to calculate
+Disposals and Clangers combined to find player efficiency
+Totals
+Per game metrics
 
 A data dictionary is provided below
 
 ```{r data dictionary}
-Column_Name <- c("Player", "GM", "KI", "MK", "HB", "GL", "BH", "TK", "CL", "CG", "FF", "FA", "1Perc")
-Description <- c("Player Name", "Games", "Kicks", "Marks", "Handballs", "Goals", "Behinds", "Tackles", "Clearances", "Clangers", "Frees For", "Frees Against", "1 Percenters")
+Column_Name <- c("Player", "GM", "KI", "MK", "HB", "GL", "ACC", "BH", "TK", "RB", "IF", "CL", "CG", "FF", "FA", "1P")
+Description <- c("Player Name", "Games", "Kicks", "Marks", "Handballs", "Goals", "Behinds", "Tackles", "Rebound 50s", "Inside 50s", "Clearances", "Clangers", "Frees For", "Frees Against", "1 Percenters")
 dict <- data.frame(Column_Name, Description)
 print.data.frame(dict, row.names = FALSE, max = NULL)
 ```
 
 As a final step before starting our analysis, null values will be replaced with zeros and players with less than 100 games will be dropped. Playing 100 games for a team is a requirement for the father-son rule and will help reduce our data set as we search for the best player of all time. 
 
-```{r final wrangling}
+```{r wrangling}
 # replace NA with 0
 player_stats[is.na(player_stats)] <- 0
 
@@ -62,10 +78,31 @@ player_stats <- filter(player_stats, player_stats$GM >=100)
 core_player_stats <- select(player_stats, GM, KI, MK, HB, GL, BH, FF, FA)
 ```
 
-ANALYSIS
+### Player Analysis
+
+Initially just the core stats
+Best player will be determined in the following way:
+Rank players according to totals 
+Rank players according to per game metrics. Data is comparable and so does not need to be normalised. 
+
+GL, ACC - half points as they are primarily aimed at forwards, looking to keep balance between statistics specific to certain positions. Look at distribution of goals, only players with more than X goals can receive accuracy points.
+CG - negative points due to being a bad metric
+
+Create weightings for each metric and sum the total and per game values for each player
+Combine the total and per game figures based on a weighting to produce one final ranking for each player
+
+
+
+
+
+
+
+From this analysis only 2 older players in the top 10. Rerun using full stats.
+
+
 
 Merge player_information and player_stats into one data table
 
 ```{r inner merge data tables}
-combined_player_stats <- merge(player_stats, player_information, by = "Player", all = FALSE)
+#combined_player_stats <- merge(player_stats, player_information, by = "Player", all = FALSE)
 ```
