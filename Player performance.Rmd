@@ -32,11 +32,17 @@ Our Player Stats table contains data for 550 players recorded across 24 attribut
 
 Furthermore, some statistics are redundant and will be removed from our data set. For instance, we care about the number of marks taken, but not whether they were contested or uncontested and the number of Brownlow votes that a player has accrued tells us other's views on the player but can be influenced by factors outside of their pure performance.
 
-```{r edit columns}
+As a final step before starting our analysis, null values will be replaced with zeros and players with less than 100 games will be dropped. Playing 100 games for a team is a requirement for the father-son rule and will help reduce our data set as we search for the best player of all time. 
+
+```{r data cleaning}
 # drop columns
 player_stats <- subset(player_stats, select = -c(HO, BR, CP, UP, CM, MI, BO, GA))
 # rename X1. column
 names(player_stats)[which(names(player_stats) == "X1.")] <- "1P"
+# replace NA with 0
+player_stats[is.na(player_stats)] <- 0
+# drop players with less than 100 games
+player_stats <- filter(player_stats, player_stats$GM >=100)
 ```
 
 I will create a new column 'ACC' that uses the goals and behinds statistics to calculate the players accuracy.
@@ -46,38 +52,64 @@ player_stats <- mutate(player_stats, ACC = GL / (GL + BH))
 # move accuracy column next to GL column
 player_stats <- relocate(player_stats, ACC, .after=GL)
 # drop behinds column
-player_stats <- select(player_stats, "Player", "GM", "KI", "MK", "HB", "GL", "ACC", "BH", "TK", "CL", "CG", "FF", "FA", "1P")
+player_stats <- select(player_stats, "Player", "GM", "KI", "MK", "HB", "DI", "GL", "ACC", "TK", "RB", "IF", "CL", "CG", "FF", "FA", "1P")
 ```
+
 While subjective, free kicks are usually awarded to players for being first to the ball or strong tackling while they are usually given for undisciplined play. In this analysis, a free kick differential and ratio will both be considered.
-Free kick ratio?
-Free kick differential?
-Frees For and Against to calculate
-Disposals and Clangers combined to find player efficiency
-Totals
-Per game metrics
+
+```{r free kick columns}
+# create differential column
+player_stats <- mutate(player_stats, FD = FF - FA)
+player_stats <- relocate(player_stats, FD, .after=FA)
+# create ratio column
+player_stats <- mutate(player_stats, FR = FF / FA)
+player_stats <- relocate(player_stats, FR, .after=FD)
+# drop behinds column
+player_stats <- select(player_stats, "Player", "GM", "KI", "MK", "HB", "DI", "GL", "ACC", "TK", "RB", "IF", "CL", "CG", "FD", "FR", "1P")
+```
+
+
+Disposals are a combination of the Kicks and Handballs columns and as such will not be used on their own. Combining this metric with the Clangers attribute however, will help us assess a player's disposal efficiency.
+```{r disposal efficiency}
+# create disposal efficiency column
+player_stats <- mutate(player_stats, DE = (DI - CG)/DI*100)
+player_stats <- relocate(player_stats, DE, .after=DI)
+player_stats$DE[player_stats$CG == 0] <- 0
+# drop disposals and clangers columns
+player_stats <- select(player_stats, "Player", "GM", "KI", "MK", "HB", "DE", "GL", "ACC", "TK", "RB", "IF", "CL", "FD", "FR", "1P")
+```
+
+When comparing players in our investigation for who is the best, total values are important but but we'll also want to look at their achievements as per game values. Higher totals will be linked to those who have played more games, something which we do want to reward, but per game values will also provide essential player performance information.
+GM, DE, ACC and FD removed from per game table
+
+```{r per game metrics and totals tables}
+# create per game dataframe
+player_stats_per_game <- player_stats
+player_stats_per_game[,3:15] <- player_stats_per_game[, 3:15] / player_stats_per_game$GM
+player_stats_per_game$FR <- player_stats_per_game$FR * player_stats_per_game$GM
+#drop GM, DE, ACC, FD columns
+player_stats_per_game <- select(player_stats_per_game, "Player", "KI", "MK", "HB", "GL", "TK", "RB", "IF", "CL", "FR", "1P")
+#drop FR column from totals
+player_stats_totals <- select(player_stats, "Player", "GM", "KI", "MK", "HB", "DE", "GL", "ACC", "TK", "RB", "IF", "CL", "FD", "1P")
+```
+
+Create two tables that feature just the core stats (those collected since 1965). Analysis will only use these two tables first to prevent bias from players with more stats. Depending on the outcome will bring in the additional stats collected since 1998.
+
+```{r create core stats tables for initial run through}
+# Extract core player stats into its own data set
+core_ps_totals <- select(player_stats_totals, Player, GM, KI, MK, HB, GL, ACC, FD)
+core_ps_per_game <- select(player_stats_per_game, Player, KI, MK, HB, GL, FR)
+```
+
 
 A data dictionary is provided below
 
 ```{r data dictionary}
-Column_Name <- c("Player", "GM", "KI", "MK", "HB", "GL", "ACC", "BH", "TK", "RB", "IF", "CL", "CG", "FF", "FA", "1P")
-Description <- c("Player Name", "Games", "Kicks", "Marks", "Handballs", "Goals", "Behinds", "Tackles", "Rebound 50s", "Inside 50s", "Clearances", "Clangers", "Frees For", "Frees Against", "1 Percenters")
+Column_Name <- c("Player", "GM", "KI", "MK", "HB", "DE", "GL", "ACC", "TK", "RB", "IF", "CL", "FD", "FR", "1P")
+Description <- c("Player Name", "Games", "Kicks", "Marks", "Handballs", "Disposal Efficiency", "Goals", "Accuracy", "Tackles", "Rebound 50s", "Inside 50s", "Clearances", "Free Differential", "Free Ratio", "1 Percenters")
 dict <- data.frame(Column_Name, Description)
 print.data.frame(dict, row.names = FALSE, max = NULL)
 ```
-
-As a final step before starting our analysis, null values will be replaced with zeros and players with less than 100 games will be dropped. Playing 100 games for a team is a requirement for the father-son rule and will help reduce our data set as we search for the best player of all time. 
-
-```{r wrangling}
-# replace NA with 0
-player_stats[is.na(player_stats)] <- 0
-
-# drop players with less than 100 games
-player_stats <- filter(player_stats, player_stats$GM >=100)
-
-# Extract core player stats into its own data set
-core_player_stats <- select(player_stats, GM, KI, MK, HB, GL, BH, FF, FA)
-```
-
 ### Player Analysis
 
 Initially just the core stats
