@@ -7,6 +7,8 @@ output: html_document
 ```{r load libraries}
 library(tidyverse)
 library(naniar)
+library(shiny)
+library(plotly)
 ```
 
 ###Read in data
@@ -188,6 +190,8 @@ Ranking$final_ranking <- Ranking$summed_totals * 0.6 + Ranking$summed_averages *
 
 Kevin Bartlett comes out on top as Richmond's greatest player but this doesn't give the full picture. Only three of the top ten players are from the pre-1998 era. Let's rerun this analysis using the full data set to give us a clearer picture on how the modern players stack up.
 
+
+
 ```{r rank player performance - FULL TOTALS}
 # calculate z-scores for each stat
 stats <- c("GM", "KI", "MK", "HB", "DE", "GL", "ACC", "TK", "RB", "IF", "CL", "FD", "1P")
@@ -204,7 +208,8 @@ for (stat in stats) {
 }
 
 # Removing points from ACC where GL is lower than median
-player_stats_totals <- mutate(player_stats_totals, ACC_points = ifelse(GL < median(GL), 0, ACC_points))
+gl_median <- median(player_stats_totals$GL, na.rm = TRUE)
+player_stats_totals$ACC_points <- ifelse(player_stats_totals$GL < gl_median, 0, player_stats_totals$ACC_points)
 
 # GL and ACC columns are worth half points
 player_stats_totals$GL_points <- player_stats_totals$GL_points/2
@@ -245,8 +250,224 @@ Calculate final player points
 Ranking <- inner_join(select(player_stats_totals, Player, summed_totals),
                        select(player_stats_per_game, Player, summed_averages),
                        by = "Player")
-Ranking$final_ranking <- Ranking$summed_totals * 0.6 + Ranking$summed_averages * 0.4
+totals_weight = 0.6
+averages_weight = 0.4
+Ranking$final_ranking <- Ranking$summed_totals * totals_weight + Ranking$summed_averages * averages_weight
 
 ```
 
 Trent Cotchin best modern Richmond player
+
+
+#Visualisation
+
+Visualising the full data set only. User will be able to select which attributes they want to include (to view just the core stats / what they deem important).
+First create a combined dataset to be used for the visualisation
+
+```{r prepare datasets for merging}
+# totals data
+# drop z-score columns
+merge_totals <- player_stats_totals %>% select(-matches("_z"))
+# update column names for merger
+new_names <- gsub("_points$", "TP", names(merge_totals))
+names(merge_totals) <- new_names
+# drop summed totals
+merge_totals <- merge_totals[, 1:(ncol(merge_totals) - 1)]
+
+# averages data
+# drop z-score columns
+merge_averages <- player_stats_per_game %>% select(-matches("_z"))
+# update column names for merger
+new_names <- gsub("_points$", "AvgP", names(merge_averages))
+names(merge_averages) <- new_names
+# drop summed averages
+merge_averages <- merge_averages[, 1:(ncol(merge_averages) - 1)]
+
+# merge datasets
+combined_ps <- inner_join(merge_totals, merge_averages, by="Player")
+
+# Rename Totals/Averages columns
+#Create a copy of the original names
+col_names <- names(combined_ps)
+# Process columns 2 to 14
+col_names[2:14] <- gsub("\\.x$", "", col_names[2:14])  # Remove .x
+col_names[2:14] <- paste0(col_names[2:14], "T")        # Add T to the end
+# Process columns 28 to 37
+col_names[28:37] <- gsub("\\.y$", "", col_names[28:37])  # Remove .x
+col_names[28:37] <- paste0(col_names[28:37], "Avg")        # Add T to the end
+# Assign the new names to the data frame
+names(combined_ps) <- col_names
+
+```
+
+Visualisation will give a breakdown of the points assigned to each player. Requires a points value to be aggregated at the atttribute level.
+```{r player points by attribute}
+# combine attribute point values
+combined_ps$CGM <- (combined_ps$GMTP*totals_weight)
+combined_ps$CKI <- (combined_ps$KITP*totals_weight)+(combined_ps$KIAvgP*averages_weight)
+combined_ps$CMK <- (combined_ps$MKTP*totals_weight)+(combined_ps$MKAvgP*averages_weight)
+combined_ps$CHB <- (combined_ps$HBTP*totals_weight)+(combined_ps$HBAvgP*averages_weight)
+combined_ps$CDE <- (combined_ps$DETP*totals_weight)
+combined_ps$CGL <- (combined_ps$GLTP*totals_weight)+(combined_ps$GLAvgP*averages_weight)
+combined_ps$CACC <- (combined_ps$ACCTP*totals_weight)
+combined_ps$CTK <- (combined_ps$TKTP*totals_weight)+(combined_ps$TKAvgP*averages_weight)
+combined_ps$CRB <- (combined_ps$RBTP*totals_weight)+(combined_ps$RBAvgP*averages_weight)
+combined_ps$CIF <- (combined_ps$IFTP*totals_weight)+(combined_ps$IFAvgP*averages_weight)
+combined_ps$CCL <- (combined_ps$CLTP*totals_weight)+(combined_ps$CLAvgP*averages_weight)
+combined_ps$CFD <- (combined_ps$FDTP*totals_weight)
+combined_ps$CFR <- (combined_ps$FRAvgP*averages_weight)
+combined_ps$C1P <- (combined_ps$`1PTP`*totals_weight)+(combined_ps$`1PAvgP`*averages_weight)
+
+# drop original total points columns
+combined_ps <- combined_ps[, -c(15:27)]
+# drop original average points columns
+combined_ps <- combined_ps[, -c(25:34)]
+#create ranking column
+combined_ps$final_rankings <- rowSums(combined_ps[25:38])
+```
+
+Data can now be loaded into Shiny app
+
+```{r interactive visualisation}
+# Load my data
+playerdata <- combined_ps
+
+# Define UI
+ui <- fluidPage(
+
+  titlePanel("Analysing the performance of the Richmond Football Club"),
+  sidebarLayout(
+    sidebarPanel(
+      # create user input for plot1
+      checkboxGroupInput("values", "Select the Metrics to Include:",
+                         choices = c("Games Played" = "CGM", 
+                                     "Kicks" = "CKI", 
+                                     "Marks" = "CMK", 
+                                     "Handballs" = "CHB", 
+                                     "Disposal Efficiency" = "CDE", 
+                                     "Goals" = "CGL", 
+                                     "Accuracy" = "CACC", 
+                                     "Tackles" = "CTK", 
+                                     "Rebound 50s" = "CRB", 
+                                     "Inside 50s" = "CIF", 
+                                     "Clearances" = "CCL",
+                                     "Free Kick Differential" = "CFD",
+                                     "Free Kick Ratio" = "CFR", 
+                                     "1 Percenters" = "C1P"),
+                        selected = c("CGM", "CKI", "CMK", "CHB", "CDE", "CGL", 
+                                      "CACC", "CTK", "CRB", "CIF", "CCL", "CFD",
+                                      "CFR", "C1P")),
+      
+    ),
+  
+    mainPanel(
+      h4("Who is the greatest Richmond player of all time?"),
+      p("By ranking players based on their per game and total metrics, we aim to
+      identify Richmond's greatest player. Focus on the metrics that matter to 
+      you most by selecting your own combinations using the checkboxes on the 
+      left hand side."),
+      plotlyOutput("barChart"),
+      
+    ))
+  )
+
+# Define server logic
+server <- function(input, output) {
+  
+  # specify unique colors to avoid repeats
+  c1 <- "#c7dbf0"
+  c2 <- "#87a353"
+  c3 <- "#f5c998"
+  
+  # plot1
+  output$barChart <- renderPlotly({
+    # rank players by totals
+    sorted_data <- playerdata[order(playerdata$final_rankings), ]
+
+    # create stacked bar chart
+    performance <- plot_ly(sorted_data, y = ~Player, height = 700)
+    
+    # set each attribute within an if statement to allow reordering based on user selection
+    if ("CGM" %in% input$values) {
+      performance <- performance %>% add_trace(x = ~CGM, name = "Games", type = "bar", orientation = 'h',
+                                               hoverinfo = "text", text = ~paste("Games: ", GMT),
+                                               textposition = "none")
+    }
+    if ("CKI" %in% input$values) {
+      performance <- performance %>% add_trace(x = ~CKI, name = "Kicks", type = "bar", orientation = 'h',
+                                               hoverinfo = "text", text = ~paste("Kicks: ", KIT, "<br>", "Kicks per Game: ", KIAvg),
+                                               textposition = "none")
+    }
+    if ("CMK" %in% input$values) {
+      performance <- performance %>% add_trace(x = ~CMK, name = "Marks", type = "bar", orientation = 'h',
+                                               hoverinfo = "text", text = ~paste("Marks: ", MKT, "<br>", "Marks per Game: ", MKAvg),
+                                               textposition = "none")
+      }
+    if ("CHB" %in% input$values) {
+        performance <- performance %>% add_trace(x = ~CHB, name = "Handballs", type = "bar", orientation = 'h',
+                                                 hoverinfo = "text", text = ~paste("Handballs: ", HBT, "<br>", "Handballs per Game: ", HBAvg),
+                                                 textposition = "none")
+      }
+      if ("CDE" %in% input$values) {
+        performance <- performance %>% add_trace(x = ~CDE, name = "Disposals Efficiency", type = "bar", orientation = 'h',
+                                                 hoverinfo = "text", text = ~paste("Disposals Efficiency: ", CDE),
+                                                 textposition = "none")
+      }
+      if ("CGL" %in% input$values) {
+        performance <- performance %>% add_trace(x = ~CGL, name = "Goals", type = "bar", orientation = 'h',
+                                                 hoverinfo = "text", text = ~paste("Goals: ", GLT, "<br>", "Goals per Game: ", GLAvg),
+                                                 textposition = "none")
+      }
+      if ("CACC" %in% input$values) {
+        performance <- performance %>% add_trace(x = ~CACC, name = "Accuracy", type = "bar", orientation = 'h',
+                                                 hoverinfo = "text", text = ~paste("Accuracy: ", ACCT),
+                                                 textposition = "none")
+      }
+      if ("CTK" %in% input$values) {
+        performance <- performance %>% add_trace(x = ~CTK, name = "Tackles", type = "bar", orientation = 'h',
+                                                 hoverinfo = "text", text = ~paste("Tackles: ", TKT, "<br>", "Tackles per Game: ", TKAvg),
+                                                 textposition = "none")
+      }
+      if ("CRB" %in% input$values) {
+        performance <- performance %>% add_trace(x = ~CRB, name = "Rebound 50s", type = "bar", orientation = 'h',
+                                                 hoverinfo = "text", text = ~paste("Rebound 50s: ", RBT, "<br>", "Rebound 50s per Game: ", RBAvg),
+                                                 textposition = "none")
+      }
+      if ("CIF" %in% input$values) {
+        performance <- performance %>% add_trace(x = ~CIF, name = "Inside 50s", type = "bar", orientation = 'h',
+                                                 hoverinfo = "text", text = ~paste("Inside 50s: ", IFT, "<br>", "Inside 50s per Game: ", IFAvg),
+                                                 textposition = "none")
+      }
+          if ("CCL" %in% input$values) {
+        performance <- performance %>% add_trace(x = ~CCL, name = "Clearances", type = "bar", orientation = 'h',
+                                                 hoverinfo = "text", text = ~paste("Clearances: ", CLT, "<br>", "Clearances per Game: ", CLAvg),
+                                                 textposition = "none")
+      }
+      if ("CFR" %in% input$values) {
+        performance <- performance %>% add_trace(x = ~CFR, name = "Frees", type = "bar", orientation = 'h',
+                                                 hoverinfo = "text", text = ~paste("Ratio of free kicks given vs awarded: ", FRAvg),
+                                                 textposition = "none", color=I(c1))
+      }
+      if ("CFD" %in% input$values) {
+        performance <- performance %>% add_trace(x = ~CFD, name = "Free Differential", type = "bar", orientation = 'h',
+                                                 hoverinfo = "text", text = ~paste("Free Kick Differential: ", FDT),
+                                                 textposition = "none", color=I(c2))
+      }
+      if ("C1P" %in% input$values) {
+        performance <- performance %>% add_trace(x = ~C1P, name = "1%", type = "bar", orientation = 'h',
+                                                 hoverinfo = "text", text = ~paste("1%: ", `1PT`, "<br>", "1% per Game: ", `1PAvg`),
+                                                 textposition = "none", color=I(c3))
+      }
+      
+    performance <- performance %>% layout(barmode = 'stack', yaxis = list(title = "Players", categoryorder = "total ascending"), xaxis = list(title = "Rankings"))
+
+  })
+   
+   
+}
+
+# Run the application
+shinyApp(ui = ui, server = server)
+
+```
+
