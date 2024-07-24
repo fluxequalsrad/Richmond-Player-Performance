@@ -30,11 +30,13 @@ cat("Number of columns:", ncol(player_stats), "\n")
 cat("\n", "Amount of missing data per column:", "\n")
 colSums(is.na(player_stats))
 ```
-Our Player Stats table contains data for 550 players recorded across 24 attributes. Some missing data is to be expected (i.e. those playing in the back pocket are unlikely to ever kick a goal) but certain columns have a lot more than is correct. When reviewing the data, we can be seen that some attributes only began being recorded during the 1998 and 1999 seasons. For this reason, we will split our data into the 'core' attributes, those recorded since 1965, and the 'modern' attributes, recorded since 1998/1999.
+Our Player Stats dataset contains data for 550 players across 24 attributes. Some missing data is to be expected (e.g. a team's full back would rarely kick a goal), however certain columns have a lot more than is reasonable. When reviewing the data, we find that some attributes only started being recorded during the 1998 and 1999 AFL seasons. Therefore, we will split our data into 'core' attributes, recorded since 1965, and 'modern' attributes, recorded since 1998/1999.
 
-Furthermore, some statistics are redundant and will be removed from our data set. For instance, we care about the number of marks taken, but not whether they were contested or uncontested and the number of Brownlow votes that a player has accrued tells us other's views on the player but can be influenced by factors outside of their pure performance.
+Furthermore, some statistics are redundant and will be removed from our dataset. For example, while we care about the number of marks a player has taken, whether they were contested or uncontested is not. Similarly, the number of Brownlow votes a player accrues reflects the umpires' opinions which may not reflect pure performance.
 
-As a final step before starting our analysis, null values will be replaced with zeros and players with less than 100 games will be dropped. Playing 100 games for a team is a requirement for the father-son rule and will help reduce our data set as we search for the best player of all time. 
+Finally, before starting our analysis, we will address missing data by replacing null values with zeros. As we are searching for the best Richmond player of all time, players with less than 100 games will also be dropped. This hurdle has ben set due to it being a requirement for the father-son rule, signifying a player's contribution to their club.
+
+# CONTINUE EDITING FROME HERE
 
 ```{r data cleaning}
 # drop columns
@@ -101,6 +103,13 @@ Create two tables that feature just the core stats (those collected since 1965).
 # Extract core player stats into its own data set
 core_ps_totals <- select(player_stats_totals, Player, GM, KI, MK, HB, GL, ACC, FD)
 core_ps_per_game <- select(player_stats_per_game, Player, KI, MK, HB, GL, FR)
+```
+
+All attributes are positively skewed. Games example below.
+```{r density plot}
+ggplot(core_ps_totals, aes(x = GM)) +
+  geom_density(fill = "skyblue", color = "black") +
+  labs(title = "Density Plot of Games Played", x = "Number of Games Played per Player", y = "Density")
 ```
 
 
