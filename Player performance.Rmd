@@ -7,7 +7,8 @@ output: html_document
 AFL is a uniquely Australian sport that forms a significant part of the Victorian identity. Founded in 1885, the Richmond Football Club is one of the longest running football clubs in Australia. Entering the Victorian Football League in 1908, the team has had a total of 1193 players play for the club to date. In this analysis, I will be using data retrieved from [afltables.com] (https://afltables.com/afl/stats/teams/richmond.html) to assess the performance of past and present players in the Richmond Football Club to ultimately identify our greatest player of all time.
 
 
-### Load libraries
+### Data Exploration and Preparation
+#### Load libraries
 ```{r load libraries}
 library(tidyverse)
 library(naniar)
@@ -15,7 +16,7 @@ library(shiny)
 library(plotly)
 ```
 
-### Read in data
+#### Read in data
 ```{r load data}
 # Player performance data from 1965 to 2024
 player_stats <-read.csv("Player Stats 1965-2024.csv")
@@ -24,7 +25,7 @@ player_stats <-read.csv("Player Stats 1965-2024.csv")
 player_list <-read.csv("Player List.csv")
 ```
 
-### Data Exploration and Preparation
+#### Data Wrangling
 ```{r initial exploration}
 # View data dimensions
 cat("Number of rows:", nrow(player_stats), "\n")
@@ -114,28 +115,25 @@ dict <- data.frame(Column_Name, Description)
 print.data.frame(dict, row.names = FALSE, max = NULL)
 ```
 
-# EDIT FROM HERE
+
 ### Player Analysis
 
-Initially just the core stats
-Best player will be determined in the following way:
-Rank players according to totals by awarding points according to distribution. calculate z-scores for each attribute and player. I'll then normalise the z-scores on a range of 0-100 for ease of readability / interpretation. These values will then be summed to get a final total for each player. This will be completed for both the totals data and the per game data.
+This analysis will be conducted by ranking players according to their performance in each attribute and then summing these values to calculate a final 'performance score'. As shown below with the 'Games' statistic as an example, each attribute has a positively skewed distribution.
 
-GL, ACC - half points as they are primarily aimed at forwards, looking to keep balance between statistics specific to certain positions. Look at distribution of goals, only players with more than median goals can receive accuracy points.
-
-Create weightings for each metric and sum the total and per game values for each player
-Combine the total and per game figures based on a weighting to produce one final ranking for each player
-
-Rank player performance based on totals
-Note: GL and ACC columns both reward those playing forward positions and are therefore worth half points for balance. Additionally, points for accuracy can only be received by players who have kicked greater than the median number of goals. Median used due to skewed distribution.
-
-All attributes are positively skewed. Games example below.
 ```{r density plot}
 ggplot(core_ps_totals, aes(x = GM)) +
   geom_density(fill = "skyblue", color = "black") +
   labs(title = "Density Plot of Games Played", x = "Number of Games Played per Player", y = "Density")
 ```
 
+In order to accurately compare players, the data will first be standardised by converting the raw values to z-scores and then normalised to fall across a 0-100 scale. These values will then be summed for each player to then find their final performance score. By using this method to rank and assign points to players, the difference in player performance has a greater impact as opposed to if we had done a straight point ranking of players (e.g. 10 points for best, 9 points for second best...). This will be completed for both the totals data and the per game data with these two results being combined according to their weighting, producing a final ranking of all players.
+
+Note that in an effort to maintain balance between playing positions, the Goals and Accuracy metrics will be awarded half points. Additionally, only players who have kicked more than the median number of goals can receive points for accuracy.
+
+
+#### Core Attributes
+
+Ranking player performance based on totals.
 ```{r rank player performance - totals}
 # calculate z-scores for each stat
 stats <- c('GM', 'KI', 'MK', 'HB', 'GL', 'ACC', 'FD')
@@ -163,10 +161,7 @@ points_cols <- paste0(stats, "_points")
 core_ps_totals$summed_totals <- rowSums(core_ps_totals[points_cols])
 ```
 
-On raw totals, Kevin Bartlett, an absolute legend of the Richmond football club comes out on top. Playing the most games out of any other player sees him score highly across all stats but this doesn't diminish his performance with his number of kicks being almost double the next best player.
-
-
-Rank player performance based on per game averages
+Ranking player performance based on per game averages
 ```{r rank player performance - per game}
 # calculate z-scores for each stat
 stats <- c('KI', 'MK', 'HB', 'GL', 'FR')
@@ -186,24 +181,36 @@ for (stat in stats) {
 points_cols <- paste0(stats, "_points")
 core_ps_per_game$summed_averages <- rowSums(core_ps_per_game[points_cols])
 ```
-When looking at per game averages, the top two are neck and neck with Brett Deledio, having a more well rounded game, and Matthew Richardson, scoring high in goals and marks. 
 
-
-Calculate final player points 
-```{r player points}
+Calculate final player performance
+```{r core player performance}
+# Calculate final rankings
 Ranking <- inner_join(select(core_ps_totals, Player, summed_totals),
                        select(core_ps_per_game, Player, summed_averages),
                        by = "Player")
 Ranking$final_ranking <- Ranking$summed_totals * 0.6 + Ranking$summed_averages * 0.4
 
+# Order the data
+Ranking <- Ranking[order(Ranking$final_ranking, decreasing = TRUE), ]
+
+# Create a numbered list
+cat("Top 10 Players based on Core Statistics:\n")
+for (i in 1:10) {
+  cat(i, ". ", Ranking$Player[i], "\n", sep = "")
+}
 ```
 
-Kevin Bartlett comes out on top as Richmond's greatest player but this doesn't give the full picture. Only three of the top ten players are from the pre-1998 era. Let's rerun this analysis using the full data set to give us a clearer picture on how the modern players stack up.
+Our analysis of the core statistics finds Kevin Bartlett, legend of the Richmond Football Club, having claim to the top ranking. Playing for Richmond between 1965 and 1983, he played 403 games which aids him in scoring highly across all statistics when considering the raw totals in isolation. This isn't to diminish his achievements however, with Bartlett's number of kicks being almost double the next highest total. 
+
+Focusing on per game averages, the top two are neck and neck with Brett Deledio having a more well rounded game, and Matthew Richardson performing strongly in average goals and marks.
+
+As the top ten list is comprised of seven players who ended their careers after 1998, I will re-run the analysis using the full data set to see how the additional records affect our findings. Obviously this will mean that players from different generations will no longer be able to be accurately compared to one another, but it will provide further insight into the performance of modern players.
 
 
-### Full stats
-give a better picture of a players performance covering more aspects of the game
+#### Expanded Attributes
+Using the full range of recorded metrics will provide us with a better picture of a player's performance, covering more aspects of the game. 
 
+Ranking player performance based on totals.
 ```{r rank player performance - FULL TOTALS}
 # calculate z-scores for each stat
 stats <- c("GM", "KI", "MK", "HB", "DE", "GL", "ACC", "TK", "RB", "IF", "CL", "FD", "1P")
@@ -232,9 +239,7 @@ points_cols <- paste0(stats, "_points")
 player_stats_totals$summed_totals <- rowSums(player_stats_totals[points_cols])
 ```
 
-Looking at the totals for the full stats, Trent Cotchin is number one, Dustin has moved from 5 to 2 (clearances and inside 50s), Joel Bowden 12 to 3 ( Rebound 50s).
-
-Rank player performance based on per game averages
+Ranking player performance based on per game averages
 ```{r rank player performance - FULL AVERAGES}
 # calculate z-scores for each stat
 stats <- c("KI", "MK", "HB", "GL", "TK", "RB", "IF", "CL", "FR", "1P")
@@ -255,9 +260,7 @@ points_cols <- paste0(stats, "_points")
 player_stats_per_game$summed_averages <- rowSums(player_stats_per_game[points_cols])
 ```
 
-Brett Deledio on top. Surprising, never top 5? but consistently good across the board.
-
-Calculate final player points 
+Calculate final player performance
 ```{r FULL player points}
 Ranking <- inner_join(select(player_stats_totals, Player, summed_totals),
                        select(player_stats_per_game, Player, summed_averages),
@@ -266,14 +269,24 @@ totals_weight = 0.6
 averages_weight = 0.4
 Ranking$final_ranking <- Ranking$summed_totals * totals_weight + Ranking$summed_averages * averages_weight
 
+# Order the data
+Ranking <- Ranking[order(Ranking$final_ranking, decreasing = TRUE), ]
+
+# Create a numbered list
+cat("Top 10 Players based on Expanded Statistics:\n")
+for (i in 1:10) {
+  cat(i, ". ", Ranking$Player[i], "\n", sep = "")
+}
+
 ```
 
-Trent Cotchin best modern Richmond player
+Analysing the full set of data results in Trent Cotchin being named as the best modern Richmond player, with Inside 50s and Clearances providing the greatest contribution to his increased performance score from the new data. It should be recognised that between the two analyses, Wayne Campbell has dropped from third to fifth best. This is due to his career bridging the two data sets, starting in the 1991 season and ending in 2005. Therefore, the analysis of the core attributes provides a better reflection of his performance within the group.
 
 
 #Visualisation
 
-Visualising the full data set only. User will be able to select which attributes they want to include (to view just the core stats / what they deem important).
+Finally these results have been visualised within an interactive Shiny app. This enables you to select the attributes that you feel are the most relevant to see how they adjust the performance rankings. 
+
 First create a combined dataset to be used for the visualisation
 
 ```{r prepare datasets for merging}
@@ -312,7 +325,7 @@ names(combined_ps) <- col_names
 
 ```
 
-Visualisation will give a breakdown of the points assigned to each player. Requires a points value to be aggregated at the atttribute level.
+The visualisation will give a breakdown of the points assigned to each player. This requires the points value to be aggregated at the attribute level.
 ```{r player points by attribute}
 # combine attribute point values
 combined_ps$CGM <- (combined_ps$GMTP*totals_weight)
@@ -338,7 +351,7 @@ combined_ps <- combined_ps[, -c(25:34)]
 combined_ps$final_rankings <- rowSums(combined_ps[25:38])
 ```
 
-Data can now be loaded into Shiny app
+The data can now be loaded into the Shiny app
 
 ```{r interactive visualisation}
 # Load my data
