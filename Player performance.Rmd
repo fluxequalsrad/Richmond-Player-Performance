@@ -407,10 +407,13 @@ server <- function(input, output) {
   # plot1
   output$barChart <- renderPlotly({
     # rank players by totals
-    sorted_data <- playerdata[order(playerdata$final_rankings), ]
+    sorted_data <- playerdata[order(playerdata$final_rankings, decreasing=TRUE), ]
+    
+    # limit to top 20 players
+    top_players <- head(sorted_data, 20)
 
     # create stacked bar chart
-    performance <- plot_ly(sorted_data, y = ~Player, height = 700)
+    performance <- plot_ly(top_players, y = ~Player, height = 700)
     
     # set each attribute within an if statement to allow reordering based on user selection
     if ("CGM" %in% input$values) {
