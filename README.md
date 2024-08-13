@@ -1,0 +1,3 @@
+# A Statistical Analysis of the Richmond Football Club
+
+This project used statistical analysis techniques to determine which player from the Richmond Football Club could be considered our greatest player of all time. This involved using a comprehensive set of player statistics to rank players based on where their totals and averages fell on each metric's distribution. Data was collected, normalised and weighted before the ranking was conducted to ensure the accuracy of the results. Shiny and Plotly were then used to create an interactive visualisation, enabling the user to compare players based on the statistics that matter to them.
